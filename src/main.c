@@ -8,6 +8,8 @@
 #include <errno.h>
 #include <unistd.h>
 #include <signal.h>
+#include <sucker.h>
+
 
 static volatile int run = 1;
 static void sig_int_handler(int signum) {
@@ -101,11 +103,10 @@ int main(int args_c, char ** args_v) {
         return -1;
     }
 
-    char buffer[1024];
 
     while (run) {
         /* accept the connection from the backlog*/
-        int client_fd = accept(fd,NULL, NULL);
+        int client_fd = accept(fd,NULL, NULL); 
         /*
          If  the  listen queue is empty of connection requests and O_NONBLOCK is not set
          on the file descriptor for the socket, accept() shall block until a  connection
@@ -115,34 +116,13 @@ int main(int args_c, char ** args_v) {
         */
 
         if (client_fd < 0 ){
-            if (errno == EINTR) continue; /* check for interrupt is via continue on while run*/
             fprintf(stderr, "accept: %s\n", strerror(errno));
             continue;
         }
 
-        while (run) {
-            memset(buffer, 0, sizeof(buffer));
-            
-            /*if we have the client fd we can start reading the inputs*/
-            ssize_t bytes = recv(client_fd, buffer, 1024, 0);
-            if (bytes > 0 ) {
-                /* good thing */
-                printf("recv: %s", buffer);
-            } else if (bytes == 0) {
-                /* connection close */
-                break;
+        handle_connection(client_fd, &run);
 
-            } else {
-                /* error */ 
-                /*errno == EAGAIN || errno == EWOULDBLOCK are somethign to consider*/
-                if (errno == EINTR && run) {
-                    continue;
-                }
-                fprintf(stderr, "recv: %s\n", strerror(errno));
-                break;
-            }
-        }
-        close(client_fd);
+        
     }
 
 

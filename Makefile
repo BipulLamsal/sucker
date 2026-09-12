@@ -1,16 +1,17 @@
 CC = cc
-SRC = ./src/main.c
+SRC = ./src/main.c ./src/sucker.c
 
 BUILDDIR = build
 COMPILED = $(BUILDDIR)/app
 
 RUN = ./$(COMPILED) 
 
+
 $(BUILDDIR):
 	mkdir -p $(BUILDDIR)
 
 it: | $(BUILDDIR)
-	$(CC) $(SRC) -o $(COMPILED)
+	$(CC) -Iinclude  $(SRC) -o $(COMPILED)
 
 run: $(COMPILED)
 	$(RUN)
