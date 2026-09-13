@@ -1,4 +1,10 @@
 /*all the requirements for sucker to suck that socket*/
 
 /* handles the client socket like a pro */
-void handle_connection(int client_fd, volatile int *is_running);
+
+struct connection_t {
+    int client_fd;
+    volatile int *is_running;
+};
+
+void *handle_connection( void *ptr );

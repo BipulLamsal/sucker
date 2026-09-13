@@ -1,4 +1,7 @@
 [X] Echo server working with telnet
-[] Working with multiple clients at a time (forking/pthreads)
-[] Maybe use a fork? or poll?
+[X] Working with multiple clients at a time (forking)
+[] Working with pthreads?
+[] Maybe use a poll?
+[] Maybe use epoll?
+[] Maybe make it async (io_uring)?
 [] Building a telnet chat with rooms

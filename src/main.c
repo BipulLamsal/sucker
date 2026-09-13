@@ -10,6 +10,7 @@
 #include <signal.h>
 #include <sucker.h>
 #include <stdlib.h>
+#include <pthread.h>
 
 static volatile int run = 1;
 static void sig_handler(int signum) {
@@ -22,6 +23,7 @@ static void sig_handler(int signum) {
 }
 
 int main(int args_c, char ** args_v) {
+
     struct sigaction sa = {0};
     sa.sa_handler = sig_handler;
     sigemptyset(&sa.sa_mask);
@@ -130,24 +132,22 @@ int main(int args_c, char ** args_v) {
             continue;
         }
 
-        int c_pid = fork();
+        pthread_t thread_id;
+        struct connection_t conn = {
+            .client_fd = client_fd,
+            .is_running = &run,
+        };
 
-        if (c_pid < 0) {
-            fprintf(stderr, "accept: %s\n", strerror(errno));
+        int ret = pthread_create(&thread_id,NULL,handle_connection,&conn);
+        if (ret != 0) {
+            close(client_fd);
+            fprintf(stderr, "pthread: %s\n", strerror(errno));
             continue;
         }
 
-        if (c_pid == 0) {
-            // child proces
-            handle_connection(client_fd, &run);
-            /* exit without cleanup */
-            _exit(EXIT_SUCCESS);
-        } else {
-            printf("pid: %d\n", c_pid);
-        }
-
+        /*worker thread*/
+        pthread_detach(thread_id);
     }
-
 
     if (fd >= 0) {
         close(fd);
