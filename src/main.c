@@ -9,21 +9,31 @@
 #include <unistd.h>
 #include <signal.h>
 #include <sucker.h>
-
+#include <stdlib.h>
 
 static volatile int run = 1;
-static void sig_int_handler(int signum) {
-    (void) signum; 
-    run = 0;
+static void sig_handler(int signum) {
+    switch (signum) {
+        case SIGINT:
+            run = 0;
+        default:
+            break;
+    }
 }
 
 int main(int args_c, char ** args_v) {
     struct sigaction sa = {0};
-    sa.sa_handler = sig_int_handler;
+    sa.sa_handler = sig_handler;
     sigemptyset(&sa.sa_mask);
-    sa.sa_flags = 0; 
+
+    sa.sa_flags = SA_NOCLDSTOP ; 
 
     if (sigaction(SIGINT, &sa, NULL) == -1) {
+        fprintf(stderr, "signal: %s\n",strerror(errno));
+        return -1;
+    }
+
+    if (sigaction(SIGCHLD, &sa, NULL) == -1) {
         fprintf(stderr, "signal: %s\n",strerror(errno));
         return -1;
     }
@@ -120,9 +130,22 @@ int main(int args_c, char ** args_v) {
             continue;
         }
 
-        handle_connection(client_fd, &run);
+        int c_pid = fork();
 
-        
+        if (c_pid < 0) {
+            fprintf(stderr, "accept: %s\n", strerror(errno));
+            continue;
+        }
+
+        if (c_pid == 0) {
+            // child proces
+            handle_connection(client_fd, &run);
+            /* exit without cleanup */
+            _exit(EXIT_SUCCESS);
+        } else {
+            printf("pid: %d\n", c_pid);
+        }
+
     }
 
 
