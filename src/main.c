@@ -47,11 +47,13 @@ int handles_signals() {
 }
 
 int main(int args_c, char ** args_v) {
+    int default_active_connections = 20;
+
     if (handles_signals() < 0){
         return -1;
     }
     int listener_fd = create_sucker_listener();
-    if (listener_fd< 0) {
+    if (listener_fd<0) {
         return -1;
     }
     
@@ -70,37 +72,42 @@ int main(int args_c, char ** args_v) {
     }
 
     struct pollfd* fds;
-    fds =  calloc(MAX_CONN, sizeof(struct pollfd)); 
-    fds[0].fd = listener_fd; 
+    fds =  calloc(default_active_connections, sizeof(struct pollfd)); 
+    for (int i =0; i<default_active_connections; i++) {
+        fds[i].fd = -1;
+    }
+    fds[0].fd = listener_fd;
+    fds[0].events = POLLIN;
 
     struct sucker_poll_t poll_info = {
         .fds = &fds,
-        .fdcount = 1, 
+        .fdcount = 1,
+        .reaper_size = default_active_connections,
         .listener_fd = listener_fd,
     };
     
     while (run) {
-        int poll_count = poll(*poll_info.fds,poll_info.fdcount, -1);
-        
+        int poll_count = poll(fds,poll_info.fdcount, -1);
         if (poll_count == -1) {
             fprintf(stderr, "listen: %s\n", strerror(errno));
             close(listener_fd);
             free(fds);
             return -1;
         }
-
         /* handle the sucker seperately */
-        check_that_sucker(&poll_info);
+        check_that_sucker(&poll_info, run);
     }
 
-    if (listener_fd >= 0) {
-        close(listener_fd);
+    for (int i = 0; i<poll_info.fdcount; i++){
+        int fd = poll_info.fds[i]->fd;
+        if (fd > 0) {
+            close(fd);
+        }
     }
+
     free(fds);
     return 0;
 }
-
-
 
 /*
  *
