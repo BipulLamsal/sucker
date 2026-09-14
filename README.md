@@ -7,6 +7,7 @@
 [X] Working with pthreads?
 [X] Maybe use a poll/select?
 [] Maybe use epoll?
-[] Wanna see the O_ASYNC thing?
+[X] Wanna see the O_ASYNC thing?
 [] Maybe make it async (io_uring)?
+[X] Maybe broadcast? 
 [] Building a telnet chat with rooms
