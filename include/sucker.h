@@ -18,5 +18,5 @@ struct connection_t {
 int create_sucker_listener();
 int create_sucker_non_block(int fd);
 void check_that_sucker(struct sucker_poll_t* poll_info,int is_running);
-int handle_connection( void *ptr );
+int handle_connection( void *ptr, struct sucker_poll_t* poll_info );
 void reap_that_sucker(struct sucker_poll_t* poll_info, int index);

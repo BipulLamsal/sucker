@@ -12,6 +12,43 @@
 #include <unistd.h>
 #include <sucker.h>
 
+/*
+ * Convert socket to IP address string.
+ * addr: struct sockaddr_in or struct sockaddr_in6
+ */
+const char *stringify_that_sucker(void *addr, char *buf, size_t size)
+{
+    struct sockaddr_storage *sas = addr;
+    struct sockaddr_in *sa4;
+    struct sockaddr_in6 *sa6;
+    void *src;
+
+    switch (sas->ss_family) {
+        case AF_INET:
+            sa4 = addr;
+            src = &(sa4->sin_addr);
+            break;
+        case AF_INET6:
+            sa6 = addr;
+            src = &(sa6->sin6_addr);
+            break;
+        default:
+            return NULL;
+    }
+
+    return inet_ntop(sas->ss_family, src, buf, size);
+}
+
+void get_that_sucker(char*host, char*serv, void* remoteaddr, socklen_t *addrlen){
+    if (getnameinfo((struct sockaddr *)&remoteaddr, *addrlen,
+                        host, sizeof host, serv, sizeof serv,
+                        NI_NUMERICHOST | NI_NUMERICSERV) < 0) {
+        fprintf(stderr, "getnameinfo: %s\n", strerror(errno));
+    } else {
+        printf("sucker connected: %s:%s\n", host, serv);
+    }
+}
+
 /* returns fd for listening the incoming request */
 int create_sucker_listener() {
     int fd = -1; 
@@ -31,20 +68,11 @@ int create_sucker_listener() {
     }
 
     for (rp = result; rp!= NULL; rp=rp->ai_next){
-        char dst[INET6_ADDRSTRLEN]; /*Max size*/
+        char dst[INET6_ADDRSTRLEN]; /*Max size*/ 
         
-        if (rp->ai_family == AF_INET) {
-            struct sockaddr_in *ipv4 = (struct sockaddr_in *) rp->ai_addr;
-            raw_addr = &(ipv4->sin_addr);
-        } else {
-            struct sockaddr_in6 *ipv6 = (struct sockaddr_in6 *) rp->ai_addr;
-            raw_addr = &(ipv6->sin6_addr);
-        }
-        
-        if (inet_ntop(rp->ai_family, raw_addr,dst,  sizeof(dst)) == NULL){
-            freeaddrinfo(result);
+        if (stringify_that_sucker(rp->ai_addr,dst,INET6_ADDRSTRLEN) == NULL){
             fprintf(stderr, "inet_ntop: %s\n", strerror(errno));
-            return -1;
+            continue;
         }
 
         printf("checking inet_ntop: %s\n", dst);
@@ -97,7 +125,11 @@ int create_sucker_non_block(int fd) {
     return 0;
 }
     
-int handle_connection(void *ptr) {
+int handle_connection(void *ptr, struct sucker_poll_t* poll_info) {
+    struct pollfd **fds = poll_info->fds;
+    int listener_fd = poll_info->listener_fd;
+    int fdcount = poll_info->fdcount;
+
     struct connection_t* arg = (struct connection_t*) ptr;
     char buffer[1024];
     /*if we have the client fd we can start reading the inputs*/
@@ -105,8 +137,26 @@ int handle_connection(void *ptr) {
 
     if (bytes > 0 ) {
         /* good thing */
-       printf("%s",buffer); 
-    } else if (bytes == 0) {
+        for (int i=0; i<fdcount; i++){
+           
+            /*skip listener and itself*/
+            if ((*fds)[i].fd == listener_fd ||  (*fds)[i].fd == arg->client_fd){
+               continue; 
+            }
+               
+            int total = 0; // bytes we have sent
+            int left = bytes; 
+            while(total < bytes ) {
+                    ssize_t sent = send((*fds)[i].fd, buffer+total, left,0);
+                    if (sent == -1) {
+                        break;
+                    }
+                    total += sent;
+                    left-= sent;
+                }
+            }
+        }
+     else if (bytes == 0) {
         /* connection close */
         return -1; 
     } else {
@@ -136,8 +186,8 @@ void reap_that_sucker(struct sucker_poll_t* poll_info, int index ){
     close(p->fd);
 }
 
-void accept_that_sucker(struct sucker_poll_t* poll_info) {
-    int fd = accept(poll_info->listener_fd, NULL, NULL);
+void accept_that_sucker(struct sucker_poll_t* poll_info, void* addr, socklen_t* addr_len ) {
+    int fd = accept(poll_info->listener_fd,(struct sockaddr*) addr, addr_len);
     struct pollfd **fds = poll_info->fds;
     
     int reaper_size = poll_info->reaper_size;
@@ -177,6 +227,11 @@ void check_that_sucker(struct sucker_poll_t* poll_info, int is_running){
     int listener_fd = poll_info->listener_fd;
     int fdcount = poll_info->fdcount;
 
+
+    struct sockaddr_storage remoteaddr; // Client address
+    socklen_t addrlen = sizeof remoteaddr;
+    char connected_client[INET6_ADDRSTRLEN];
+
     for (int i = 0; i<fdcount; i++) {
         if ((*fds)[i].revents & (POLLIN | POLL_HUP)) {
 
@@ -185,7 +240,10 @@ void check_that_sucker(struct sucker_poll_t* poll_info, int is_running){
                 // accept a new sucker
                 // this means we need to add to our exitiing fds list
                 // we need to make sure our count is not exceeding
-                accept_that_sucker(poll_info);
+                accept_that_sucker(poll_info, &remoteaddr, &addrlen); 
+                char host[NI_MAXHOST], serv[NI_MAXSERV];
+                get_that_sucker(host, serv, &remoteaddr, &addrlen);
+                
             } else {
                 // read that sucker
                 pthread_t thread_id;
@@ -193,7 +251,7 @@ void check_that_sucker(struct sucker_poll_t* poll_info, int is_running){
                     .client_fd = (*fds)[i].fd,
                     .is_running = &is_running,
                 };
-                int ret = handle_connection(&conn);
+                int ret = handle_connection(&conn, poll_info);
                 if (ret <0) {
                     reap_that_sucker(poll_info, i);
                 }
