@@ -114,6 +114,7 @@ int main(void) {
 
     for (;;) {
         int nfds = epoll_wait(epollfd, events, MAX_EVENTS, -1);
+        printf("called!\n");
         if (nfds == -1) {
             perror("epoll_wait");
             break;
@@ -132,29 +133,40 @@ int main(void) {
                     continue;
                 }
 
+                fcntl(client_fd, F_SETFL, fcntl(client_fd, F_GETFL) | O_NONBLOCK);
+
                 char s[INET6_ADDRSTRLEN + 8];
                 printf("fd %d connected: %s\n", client_fd,
                        addr_to_str(&addr, s, sizeof(s)));
 
-                ev.events = EPOLLIN; 
+                ev.events = EPOLLIN | EPOLLET; 
                 ev.data.fd = client_fd;
+
                 if (epoll_ctl(epollfd, EPOLL_CTL_ADD, client_fd, &ev) == -1) {
                     perror("epoll_ctl: client_fd");
                     close(client_fd);
                     continue;
                 }
+
             } else {
-                char buf[1024];
-                ssize_t r = recv(fd, buf, sizeof(buf), 0);
-                if (r > 0) {
-                    printf("fd %d: got %zd bytes\n", fd, r);
-                    send(fd, buf, r, 0);      // echo back
-                } else if (r == 0) {
-                    printf("fd %d: client closed\n", fd);
-                    close(fd);                // also removes it from epoll
-                } else {
-                    perror("recv");
-                    close(fd);
+                char buf[2];
+                for (;;) {
+                    ssize_t r = recv(fd, buf, sizeof(buf), 0);
+                    if (r > 0) {
+                        printf("fd %d: got %zd bytes\n", fd, r);
+                        printf("received: %.*s\n", (int)r, buf);
+                        send(fd, buf, r, 0);      // echo back
+                    } else if (r == 0) {
+                        printf("fd %d: client closed\n", fd);
+                        close(fd);                // also removes it from epoll
+                        break;
+                    } else {
+                        if (errno == EAGAIN)
+                            break;
+                        perror("recv");
+                        close(fd);
+                        break;
+                    }
                 }
             }
         }
