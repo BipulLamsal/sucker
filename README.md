@@ -6,7 +6,7 @@
 - [X] Working with multiple clients at a time (forking)
 - [X] Working with pthreads?
 - [X] Maybe use a poll/select?
-- [ ] Maybe use epoll?
+- [X] Maybe use epoll?
 - [X] Wanna see the O_ASYNC thing?
 - [ ] Maybe make it async (io_uring)?
 - [X] Maybe broadcast? 
