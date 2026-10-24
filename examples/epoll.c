@@ -162,7 +162,7 @@ int main(void) {
                             if (s>0) {
                                 sent += s;
                             } else if (s == -1 && errno == EAGAIN) {
-                                // done sending!
+                                // done sending but the buffer is full so we drop?
                                 break;
                             }else {
                                 perror("send");
